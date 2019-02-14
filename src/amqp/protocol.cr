@@ -379,13 +379,6 @@ module AMQP::Protocol
   end
 
   class IO
-    @@bigendian : Bool = \
-      begin
-        tmp = 1_u16
-        ptr = pointerof(tmp)
-        ptr[0] == 0_u8 && ptr[1] == 1_u8
-      end
-
     getter eof
 
     def initialize(@io : ::IO::Memory)
@@ -396,21 +389,16 @@ module AMQP::Protocol
       @eof = false
     end
 
-    macro read_typed(type)
-      buf = uninitialized {{type}}
-      slice = Slice.new(pointerof(buf).as(Pointer(UInt8)), sizeof(typeof(buf)))
-      unless read(slice)
-        return nil
-      end
-      unless @@bigendian
-        reverse(slice)
-      end
-      buf
+    def initialize(@io : ::String::Builder)
+      @eof = false
     end
 
     macro def_read(type)
-      def read_{{type.id.downcase}}
-        read_typed({{type}})
+      def read_{{type.id.downcase}} : {{type.id}}?
+        bytes = Bytes.new(sizeof({{type.id}}))
+        return nil unless read bytes
+
+        ::IO::ByteFormat::NetworkEndian.decode({{type.id}}, bytes).as({{type.id}})
       end
     end
 
@@ -544,11 +532,10 @@ module AMQP::Protocol
     end
 
     def write(v)
-      slice = Slice.new(pointerof(v).as(Pointer(UInt8)), sizeof(typeof(v)))
-      if slice.size > 1 && !@@bigendian
-        reverse(slice)
-      end
-      write(slice)
+      slice = Bytes.new(sizeof(typeof(v)))
+      ::IO::ByteFormat::NetworkEndian.encode(v, slice)
+
+      write slice
     end
 
      def_write(UInt8)
