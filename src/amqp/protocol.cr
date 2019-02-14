@@ -234,7 +234,7 @@ module AMQP::Protocol
       raise ::IO::EOFError.new unless channel
       size = io.read_long
       raise ::IO::EOFError.new unless size
-      body = Slice(UInt8).new(size.to_i32)
+      body = Slice(UInt8).new(size.to_u32)
       io.read(body)
       raise ::IO::EOFError.new if io.eof
       final = io.read_octet
@@ -337,7 +337,7 @@ module AMQP::Protocol
     end
 
     def self.parse(channel, size, io)
-      body = Slice(UInt8).new(size.to_i32)
+      body = Slice(UInt8).new(size.to_u32)
       unless io.read(body)
         raise ::IO::EOFError.new
       end
@@ -454,7 +454,7 @@ module AMQP::Protocol
     def read_shortstr
       len = read_uint8
       return nil unless len
-      slice = Slice(UInt8).new(len.to_i32)
+      slice = Slice(UInt8).new(len)
       unless read(slice)
         return nil
       end
@@ -464,7 +464,7 @@ module AMQP::Protocol
     def read_longstr
       len = read_uint32
       return nil unless len
-      slice = Slice(UInt8).new(len.to_i32)
+      slice = Slice(UInt8).new(len)
       unless read(slice)
         return nil
       end
@@ -594,7 +594,7 @@ module AMQP::Protocol
      end
 
      def write_timestamp(v : Time)
-       write(v.to_unix.to_i64)
+       write(v.to_unix)
      end
 
      protected def write_field(field)
@@ -624,11 +624,11 @@ module AMQP::Protocol
          write_longstr(field)
        when Array(UInt8)
          write_octet('x')
-         write(field.size.to_i32)
-         @io.write(Slice.new(field.to_unsafe, field.size))
+         write(field.size.to_u32)
+         field.each {|v| write_field(v)}
        when Array
          write_octet('A')
-         write(field.size.to_i32)
+         write(field.size.to_u32)
          field.each {|v| write_field(v)}
        when Time
          write_octet('T')
@@ -644,7 +644,7 @@ module AMQP::Protocol
     protected def read_array
       len = read_uint32
       return nil unless len
-      slice = Slice(UInt8).new(len.to_i32)
+      slice = Slice(UInt8).new(len)
       unless read(slice)
         return nil
       end
@@ -679,20 +679,10 @@ module AMQP::Protocol
     protected def read_byte_array
       len = read_int32
       return nil unless len
-      array = Array(UInt8).new(len) { 0_u8 }
-      unless read(Slice.new(array.to_unsafe, len))
-        return nil
-      end
-      array
-    end
+      bytes = Bytes.new(len)
 
-    private def reverse(slice)
-      i = 0
-      j = slice.size - 1
-      while i < j
-        slice.to_unsafe.swap i, j
-        i += 1
-        j -= 1
+      if read(bytes)
+        bytes.to_a
       end
     end
   end
