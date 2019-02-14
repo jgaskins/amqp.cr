@@ -64,7 +64,6 @@ module AMQP
     def initialize(@config = Config.new)
       @rpc = ::Channel(Protocol::Method).new
       @broker = Broker.new(@config)
-      @break_loop = Timed::TimedChannel(Bool).new(1)
 
       # close connection attributes
       @close_callbacks = [] of UInt16, String ->
@@ -138,8 +137,9 @@ module AMQP
     def run_loop
       @running_loop = true
       loop do
+        sleep 1.millisecond
         break if closed
-        break if @break_loop.receive(1.seconds)
+        break if !@running_loop
       end
     ensure
       @running_loop = false
@@ -157,7 +157,7 @@ module AMQP
     # end
     # ```
     def loop_break
-      @break_loop.send(true) if @running_loop
+      @running_loop = false
     end
 
     # Closes the connection to a server

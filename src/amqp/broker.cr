@@ -2,7 +2,6 @@ require "socket"
 require "openssl"
 require "./protocol"
 require "./spec091"
-require "./timed_channel"
 require "colorize"
 
 class AMQP::Broker
@@ -23,7 +22,7 @@ class AMQP::Broker
       @socket.sync = true
     end
     @io = Protocol::IO.new(@socket.as(IO::Buffered))
-    @sends = Timed::TimedChannel(Time).new(1)
+    @sends = ::Channel(Time).new(1)
     @closed = false
     @heartbeater_started = false
     @sending = false
@@ -178,7 +177,7 @@ class AMQP::Broker
     interval = @config.heartbeat
     loop do
       last_sent = Time.now
-      send_time = @sends.receive(interval)
+      send_time = @sends.receive
       break if @closed
       unless send_time
         # timeout received, fill the channel with heartbeats
